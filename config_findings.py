@@ -1,35 +1,36 @@
 HIDDEN_SIZE = 512
+pathologies = [
+    "Enlarged Cardiomediastinum",
+    "Cardiomegaly",
+    "Lung Opacity",
+    "Lung Lesion",
+    "Edema",
+    "Consolidation",
+    "Pneumonia",
+    "Atelectasis",
+    "Pneumothorax",
+    "Pleural Effusion",
+    "Pleural Other",
+    "Fracture",
+    "Support Devices",
+]
 dataset = {
             "imgpath" : "/data/physionet.org/files/mimic-cxr-jpg/2.0.0/files",
-            "txtpath" : "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/text_data.pkl",
-            "vocabpath" : "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/vocab.pkl",
+            "txtpath" : "/home/jiachen.li/jiachen_medical_images/preprocessed/text_data.pkl",
+            "vocabpath" : "/home/jiachen.li/jiachen_medical_images/preprocessed/vocab.pkl",
             "csvpath" : "/data/physionet.org/files/mimic-cxr-jpg/2.0.0/mimic-cxr-2.0.0-chexpert.csv",
             "metacsvpath" : "/data/physionet.org/files/mimic-cxr-jpg/2.0.0/mimic-cxr-2.0.0-metadata.csv",
             "mode" : "PER_IMAGE",
-            "pathologies" : [
-                "Enlarged Cardiomediastinum",
-                "Cardiomegaly",
-                "Lung Opacity",
-                "Lung Lesion",
-                "Edema",
-                "Consolidation",
-                "Pneumonia",
-                "Atelectasis",
-                "Pneumothorax",
-                "Pleural Effusion",
-                "Pleural Other",
-                "Fracture",
-                "Support Devices",
-                "No Finding"
-                ],
+            "pathologies" : pathologies,
             "views": ["PA"],
             "seed": 0,
+            "lr": 5e-4,
             "train" : {
                 "imgpath" : "/data/physionet.org/files/mimic-cxr-jpg/2.0.0/files",
-                "feature_root": "/home/jiachen.li/data_relu",
-                "processed_csv": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/mimic_train.csv",
-                "txtpath": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/text_data.pkl",
-                "vocabpath": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/vocab.pkl",
+                "feature_root": "/home/jiachen.li/data_finetune",
+                "processed_csv": "/home/jiachen.li/jiachen_medical_images/preprocessed/mimic_train.csv",
+                "txtpath": "/home/jiachen.li/jiachen_medical_images/preprocessed/text_data.pkl",
+                "vocabpath": "/home/jiachen.li/jiachen_medical_images/preprocessed/vocab.pkl",
                 "transforms":[
                     ("Resize", {
                         "size": 256,
@@ -56,10 +57,10 @@ dataset = {
             },
             "val" : {
                 "imgpath" : "/data/physionet.org/files/mimic-cxr-jpg/2.0.0/files",
-                "feature_root": "/home/jiachen.li/data_relu",
-                "processed_csv": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/mimic_val.csv",
-                "txtpath": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/text_data.pkl",
-                "vocabpath": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/vocab.pkl",
+                "feature_root": "/home/jiachen.li/data_finetune",
+                "processed_csv": "/home/jiachen.li/jiachen_medical_images/preprocessed/mimic_val.csv",
+                "txtpath": "/home/jiachen.li/jiachen_medical_images/preprocessed/text_data.pkl",
+                "vocabpath": "/home/jiachen.li/jiachen_medical_images/preprocessed/vocab.pkl",
                 "transforms":[
                     ("Resize", {
                         "size": 256,
@@ -86,10 +87,10 @@ dataset = {
             },
             "test": {
                 "imgpath" : "/data/physionet.org/files/mimic-cxr-jpg/2.0.0/files",
-                "feature_root": "/home/jiachen.li/data_relu",
-                "processed_csv": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/mimic_test.csv",
-                "txtpath": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/text_data.pkl",
-                "vocabpath": "/home/jiachen.li/jiachen_medical_images/preprocessed_with_normal/vocab.pkl",
+                "feature_root": "/home/jiachen.li/data_finetune",
+                "processed_csv": "/home/jiachen.li/jiachen_medical_images/preprocessed/mimic_test.csv",
+                "txtpath": "/home/jiachen.li/jiachen_medical_images/preprocessed/text_data.pkl",
+                "vocabpath": "/home/jiachen.li/jiachen_medical_images/preprocessed/vocab.pkl",
                 "transforms": [
                     ("Resize", {
                         "size": 256,
@@ -116,11 +117,11 @@ dataset = {
             "model": {
                 "sentence_lstm": {
                     "hidden_size": HIDDEN_SIZE,
-                    "num_units": HIDDEN_SIZE,
                     "visual_dim": 1024,
                     "semantic_dim": HIDDEN_SIZE,
-                    "num_tags": 14,
+                    "num_tags": len(pathologies),
                     "top_k_for_semantic": 3,
+                    "threshold": 0.5,
                 },
                 "word_lstm":{
                     "hidden_size": HIDDEN_SIZE,
@@ -129,6 +130,6 @@ dataset = {
                 "lambda_stop": 1.,
                 "lambda_word": 1.,
                 "lambda_attn": 1.,
-                "mlc_weights": "exp_default/1611883760.6407511.pt",
+                "mlc_weights": "exp_default_mlc/1613211485.954774.pt",
             }
         }

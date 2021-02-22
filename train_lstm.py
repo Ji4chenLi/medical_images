@@ -4,14 +4,12 @@ import os
 import os.path as osp
 from pathlib import Path
 import torch
-from texar.torch.run import Executor, cond, metric, action
+from texar.torch.run import Executor, cond, action
+from texar.torch.run.metric import Average, RunningAverage
 
 from build_vocab import Vocabulary
-from models.cv_model import MLCTrainer
+from models.model import MedicalReportGenerator
 from mimic_cxr import MIMICCXR_Dataset
-
-from evaluation_metrics import HammingLoss, MultiLabelConfusionMatrix, \
-    MultiLabelF1, MultiLabelPrecision, MultiLabelRecall, RocAuc
 
 from config_findings import dataset as hparams_dataset
 
@@ -22,13 +20,19 @@ parser.add_argument(
     '--save_dir',
     type=str,
     help='Place to save training results',
-    default='exp_default/'
+    default='exp_default_lstm_100/'
 )
 parser.add_argument(
     '--output_dir',
     type=str,
     help='Place to save logs results',
-    default='output_default/'
+    default='output_default_lstm_100/'
+)
+parser.add_argument(
+    '--tbx_dir',
+    type=str,
+    help='Place to save tensorboard data',
+    default='tbx_folder_lstm_100/'
 )
 parser.add_argument(
     '--grad_clip',
@@ -58,7 +62,7 @@ datasets = {split: MIMICCXR_Dataset(hparams=hparams_dataset[split])
             for split in ["train", "val", "test"]}
 print("done with loading")
 # model
-model = MLCTrainer()
+model = MedicalReportGenerator(hparams_dataset["model"])
 output_dir = Path(args.output_dir)
 num_label = len(hparams_dataset['pathologies'])
 
@@ -70,20 +74,21 @@ executor = Executor(
     test_data=datasets["test"],
     checkpoint_dir=args.save_dir,
     save_every=cond.validation(better=True),
-    train_metrics=[("loss", metric.RunningAverage(args.display_steps))],
-    optimizer={"type": torch.optim.Adam},
+    train_metrics=[
+        ("loss", Average(pred_name="loss")),
+        ("stop_loss", Average(pred_name="stop_loss")),
+        ("word_loss", Average(pred_name="word_loss")),
+        ("attention_loss", Average(pred_name="attention_loss")),
+        ("topic_var", RunningAverage(pred_name="topic_var", queue_size=args.display_steps)),
+        ],
+    optimizer={"type": torch.optim.Adam, "lr": hparams_dataset["lr"]},
     grad_clip=args.grad_clip,
     log_every=cond.iteration(args.display_steps),
     log_destination=[sys.stdout, output_dir / "log.txt"],
     validate_every=cond.epoch(1),
     valid_metrics=[
-        # HammingLoss[float](num_label=num_label, pred_name="preds", label_name="label"),
-        # RocAuc(pred_name="probs", label_name="label"),
-        # MultiLabelConfusionMatrix(num_label=num_label, pred_name="preds", label_name="label"),
-        # MultiLabelPrecision(num_label=num_label, pred_name="preds", label_name="label"),
-        # MultiLabelRecall(num_label=num_label, pred_name="preds", label_name="label"),
-        # MultiLabelF1(num_label=num_label, pred_name="preds", label_name="label"),
-        ("loss", metric.Average())
+        # ("stop_loss", Average(pred_name="stop_loss")),
+        ("word_loss", Average(pred_name="word_loss")),
     ],
     plateau_condition=[
         cond.consecutive(cond.validation(better=False), 2)],
@@ -93,20 +98,14 @@ executor = Executor(
         action.scale_lr(0.8)],
     stop_training_on=cond.iteration(args.max_train_steps),
     test_mode='eval',
-    tbx_logging_dir='tbx_folder',
+    tbx_logging_dir=args.tbx_dir,
     test_metrics=[
-        HammingLoss[float](num_label=num_label, pred_name="preds", label_name="label"),
-        RocAuc(pred_name="probs", label_name="label"),
-        MultiLabelConfusionMatrix(num_label=num_label, pred_name="preds", label_name="label"),
-        MultiLabelPrecision(num_label=num_label, pred_name="preds", label_name="label"),
-        MultiLabelRecall(num_label=num_label, pred_name="preds", label_name="label"),
-        MultiLabelF1(num_label=num_label, pred_name="preds", label_name="label"),
-        ("loss", metric.Average())
+        ("stop_loss", Average(pred_name="stop_loss")),
+        ("word_loss", Average(pred_name="word_loss")),
     ],
     print_model_arch=False,
     show_live_progress=True
 )
 
-# executor.train()
-executor.load('exp_default/1611883760.6407511.pt')
-executor.test()
+executor.train()
+# executor.test()

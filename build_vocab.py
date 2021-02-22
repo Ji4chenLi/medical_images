@@ -5,15 +5,25 @@ from collections import Counter
 from utils import load_txt, is_nan
 
 
+PAD_TOKEN = 0
+START_TOKEN = 1
+END_TOKEN = 2
+UNK_TOKEN = 3
+
 class Vocabulary:
     def __init__(self):
         self.word2idx = {}
         self.id2word = {}
         self.idx = 0
         self.add_word('<pad>')
-        self.add_word('<end>')
         self.add_word('<start>')
+        self.add_word('<end>')
         self.add_word('<unk>')
+
+        assert self.id2word['<pad>'] == PAD_TOKEN
+        assert self.id2word['<start>'] == START_TOKEN
+        assert self.id2word['<end>'] == END_TOKEN
+        assert self.id2word['<unk>'] == UNK_TOKEN
 
     def add_word(self, word):
         if word not in self.word2idx:

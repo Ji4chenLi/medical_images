@@ -30,12 +30,12 @@ class preprocess_mimic():
         for pathology in self.pathologies:
             if pathology in self.csv.columns:
                 self.csv.loc[self.csv[pathology] == 1, pathology] = 1.0
-                if pathology != "No Finding":
-                    self.csv.loc[healthy, pathology] = 0.0
+                self.csv.loc[healthy, pathology] = 0.0
                 self.csv.loc[self.csv[pathology] == -1, pathology] = 0.0
                 self.csv.loc[pd.isna(self.csv[pathology]), pathology] = 0.0
 
-        self.csv["path"] = self.csv.apply(lambda row: combine_path(self.imgpath, row), axis=1)
+        self.csv["path"] = self.csv.apply(
+            lambda row: combine_path(self.imgpath, row), axis=1)
 
         if self.mode == 'PER_IMAGE':
             # Keep only the PA view.
@@ -77,23 +77,40 @@ def combine_path(imgpath, row):
 
 if __name__ == "__main__":
     # preprocess_mimic()
-    csv = pd.read_csv('/data/physionet.org/files/mimic-cxr-jpg/2.0.0/mimic-cxr-2.0.0-chexpert.csv')
-    for _, row in csv.iterrows():
-        print(row)
-        exit()
+    # csv = pd.read_csv('/data/physionet.org/files/mimic-cxr-jpg/2.0.0/mimic-cxr-2.0.0-chexpert.csv')
+    # for _, row in csv.iterrows():
+    #     print(row)
+    #     exit()
+    csv = pd.read_csv('preprocessed/mimic_train.csv')
+    count = [0] * 13
+    for total, row in csv.iterrows():
+        labels = row[1:].to_list()
+        count[int(sum(labels))] += 1
+    # count = [6969, 6843, 1281, 2152, 1066, 1385, 2159, 9658, 8373, 707, 4008, 1630, 3659]
+    # total = 67307
+    print(count, total)
+    # print([round((total - c) / c, 1) for c in count])
  
  
 
 ## Codes to make sure the preprocessing is correct by adding the "No Finding" tags
+    # import numpy as np
+    # with_normal = pd.read_csv('preprocessed_with_normal/mimic_train.csv')
+    # without_normal = pd.read_csv('without_normal_result/preprocessed/mimic_train.csv')
 
-# with_normal = pd.read_csv('preprocessed_with_normal/mimic_train.csv')
-# without_normal = pd.read_csv('preprocessed/mimic_train.csv')
+    # for i, with_normal_row in with_normal.iterrows():
+    #     loc = (without_normal['path'] == with_normal_row[0]).to_numpy()
+    #     try:
+    #         index = np.where(loc)[0][0]
+    #     except Exception:
+    #         # print('1')
+    #         continue
 
-# for i, with_normal_row in with_normal.iterrows():
-#     without_normal_row = without_normal.iloc[i]
-#     assert with_normal_row[0] == without_normal_row[0], (with_normal_row[0], without_normal_row[0])
-#     with_normal_label = with_normal_row[1:].tolist()
-#     without_normal_label = without_normal_row[1:].tolist()
-    
-#     assert without_normal_label == with_normal_label[:8] + with_normal_label[9:]
+    #     without_normal_row = without_normal.loc[index]
+    #     assert with_normal_row[0] == without_normal_row[0], (with_normal_row[0], without_normal_row[0])
+    #     with_normal_label = with_normal_row[1:].tolist()
+    #     without_normal_label = without_normal_row[1:].tolist()
+        
+    #     assert without_normal_label == with_normal_label
+    #     print('Correct')
 

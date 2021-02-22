@@ -28,10 +28,8 @@ def process_txt():
             'impression': impression
         }
 
-    with open('./preprocessed/text_data.pkl', 'wb') as f:
+    with open(dataset['txtpath'], 'wb') as f:
         pickle.dump(text_dict, f)
-
-
 
 def check_item_exist():
     text_dict = load_txt(text_data_path)

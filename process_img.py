@@ -1,8 +1,9 @@
 import os
 import os.path as osp
+import csv
 from tqdm import tqdm
 import pandas as pd
-import csv
+
 import torch
 import torch.utils.data
 from torchvision.datasets.folder import pil_loader
@@ -164,103 +165,122 @@ def save_features_pt(loader, root_dir):
 
                 torch.save(feature, path)
 
+def exclude_invalid(inp_file, out_file, invalid):
+    with open(inp_file, 'rt') as inp, open(out_file, 'wt') as out:
+        writer = csv.writer(out)
+        for row in csv.reader(inp):
+            paths = row[0].split(',')[0]
+            if invalid[0] in paths or invalid[1] in paths or invalid[2] in paths:
+                continue
+            else:
+                writer.writerow(row)
+
 
 if __name__ == "__main__":
     hparams = config.dataset
     datasets = {split: MIMICCXR_Image_Dataset(hparams=config.dataset[split])
                 for split in ["train", "val", "test"]}
     model = CNNnetwork()
+
     prefix = config.dataset['imgpath']
 
-    # train_loader = torch.utils.data.DataLoader(datasets['train'],
-    #                                            batch_size=32,
-    #                                            num_workers=2,
-    #                                            drop_last=False)
+    train_loader = torch.utils.data.DataLoader(datasets['train'],
+                                               batch_size=32,
+                                               num_workers=2,
+                                               drop_last=False)
 
-    # root_to_save = '/home/jiachen.li/data_relu/train'
-    # save_features_pt(train_loader, root_to_save)
+    root_to_save = '/home/jiachen.li/data_finetune'
+    save_features_pt(train_loader, root_to_save)
 
-    # val_loader = torch.utils.data.DataLoader(datasets['val'],
-    #                                            batch_size=32,
-    #                                            num_workers=2,
-    #                                            drop_last=False)
+    val_loader = torch.utils.data.DataLoader(datasets['val'],
+                                               batch_size=32,
+                                               num_workers=2,
+                                               drop_last=False)
 
-    # root_to_save = '/home/jiachen.li/data_relu/val'
-    # save_features_pt(val_loader, root_to_save)
+    root_to_save = '/home/jiachen.li/data_finetune'
+    save_features_pt(val_loader, root_to_save)
 
-    # test_loader = torch.utils.data.DataLoader(datasets['test'],
-    #                                            batch_size=32,
-    #                                            num_workers=2,
-    #                                            drop_last=False)
+    test_loader = torch.utils.data.DataLoader(datasets['test'],
+                                               batch_size=32,
+                                               num_workers=2,
+                                               drop_last=False)
 
-    # root_to_save = '/home/jiachen.li/data_relu/test'
-    # save_features_pt(test_loader, root_to_save)
+    root_to_save = '/home/jiachen.li/data_finetune/test'
+    save_features_pt(test_loader, root_to_save)
 
-    # inp_file = hparams['train']['processed_csv']
-    # out_file = './preprocessed_with_normal/train.csv'
+
     # invalid = [
     #     '8de3cbff-0613dea5-597b3a9b-cf3bc5e6-f87f6c36.jpg',
     #     'bef65ae1-4e634fec-87c5648e-2310b295-352456b0.jpg',
     #     '2e75ef66-664a337d-927a64a7-c2c87db7-2f2688dc.jpg'
     # ]
-    # with open(inp_file, 'rt') as inp, open(out_file, 'wt') as out:
-    #     writer = csv.writer(out)
-    #     for row in csv.reader(inp):
-    #         paths = row[0].split(',')[0]
-    #         if invalid[0] in paths or invalid[1] in paths or invalid[2] in paths:
-    #             continue
-    #         else:
-    #             writer.writerow(row)
 
-    train_csv = pd.read_csv(hparams['train']['processed_csv'])
-    val_csv = pd.read_csv(hparams['val']['processed_csv'])
-    test_csv = pd.read_csv(hparams['test']['processed_csv'])
+    # inp_file = hparams['train']['processed_csv']
+    # out_file = './preprocessed/train.csv'
+    # exclude_invalid(inp_file, out_file, invalid)
 
-    feature_root = '/home/jiachen.li/data_relu'
-    prefix = hparams['imgpath']
+    # inp_file = hparams['val']['processed_csv']
+    # out_file = './preprocessed/val.csv'
+    # exclude_invalid(inp_file, out_file, invalid)
 
-    count = 0
-    for _, row in train_csv.iterrows():
-        path = row[0].split(',')[0]
-        pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
+    # inp_file = hparams['test']['processed_csv']
+    # out_file = './preprocessed/test.csv'
+    # exclude_invalid(inp_file, out_file, invalid)
 
-        if not osp.exists(pt_path):
-            img = pil_loader(path)
-            img_pt = datasets['train'].source.transforms(img).unsqueeze(0)
-            with torch.no_grad():
-                print(img_pt.shape)
-                feature = model(img_pt)
-            torch.save(feature, path)
-            count += 1
+######################
 
-    print(count)
+    # train_csv = pd.read_csv(hparams['train']['processed_csv'])
+    # val_csv = pd.read_csv(hparams['val']['processed_csv'])
+    # test_csv = pd.read_csv(hparams['test']['processed_csv'])
 
-    for _, row in val_csv.iterrows():
-        path = row[0].split(',')[0]
-        pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
+    # feature_root = '/home/jiachen.li/data_finetune'
+    # prefix = hparams['imgpath']
 
-        if not osp.exists(pt_path):
-            img = pil_loader(path)
-            img_pt = datasets['val'].source.transforms(img).unsqueeze(0)
-            with torch.no_grad():
-                print(img_pt.shape)
-                feature = model(img_pt)
-            torch.save(feature, path)
-            count += 1
+    # count = 0
+    # for _, row in train_csv.iterrows():
+    #     path = row[0].split(',')[0]
+    #     pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
 
-    print(count)
+    #     if not osp.exists(pt_path):
+    #         # img = pil_loader(path)
+    #         # img_pt = datasets['train'].source.transforms(img).unsqueeze(0)
+    #         # with torch.no_grad():
+    #         #     print(img_pt.shape)
+    #         #     feature = model(img_pt)
+    #         # torch.save(feature, path)
+    #         count += 1
+    #         continue
 
-    for _, row in test_csv.iterrows():
-        path = row[0].split(',')[0]
-        pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
+    # print(count)
 
-        if not osp.exists(pt_path):
-            img = pil_loader(path)
-            img_pt = datasets['test'].source.transforms(img).unsqueeze(0)
-            with torch.no_grad():
-                print(img_pt.shape)
-                feature = model(img_pt)
-            torch.save(feature, path)
-            count += 1
+    # for _, row in val_csv.iterrows():
+    #     path = row[0].split(',')[0]
+    #     pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
 
-    print(count)
+    #     if not osp.exists(pt_path):
+    #         # img = pil_loader(path)
+    #         # img_pt = datasets['val'].source.transforms(img).unsqueeze(0)
+    #         # with torch.no_grad():
+    #         #     print(img_pt.shape)
+    #         #     feature = model(img_pt)
+    #         # torch.save(feature, path)
+    #         count += 1
+    #         continue
+
+    # print(count)
+
+    # for _, row in test_csv.iterrows():
+    #     path = row[0].split(',')[0]
+    #     pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
+
+    #     if not osp.exists(pt_path):
+    #         # img = pil_loader(path)
+    #         # img_pt = datasets['test'].source.transforms(img).unsqueeze(0)
+    #         # with torch.no_grad():
+    #         #     print(img_pt.shape)
+    #         #     feature = model(img_pt)
+    #         # torch.save(feature, path)
+    #         count += 1
+    #         continue
+
+    # print(count)

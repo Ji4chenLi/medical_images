@@ -11,27 +11,44 @@ import torchvision.models as tvm
 
 class CNNnetwork(nn.Module):
 
-    def __init__(self, mode="PER_IMAGE", input_channel="RGB"):
+    def __init__(self):
         super().__init__()
-        self.mode = mode
-        assert input_channel == "RGB"
-        densenet = tvm.densenet121(pretrained=True)
-        modules = list(densenet.features)
-        self.features = nn.Sequential(*modules)
+        self.dense_net_121 = tvm.densenet121(pretrained=True)
+        num_fc_kernels = self.dense_net_121.classifier.in_features
+        self.dense_net_121.classifier = nn.Linear(
+            num_fc_kernels, num_fc_kernels
+        )
+        self._load_from_state_dict()
+        self.dense_net_121.classifier.weight.data.copy_(
+            torch.eye(num_fc_kernels)
+        )
+        self.dense_net_121.classifier.bias.data.zero_()
+
+    def _load_from_state_dict(self, ckpt='./model.pth.tar'):
+        pretrained_weight = torch.load(ckpt)['state_dict']
+        new_state_dict = {}
+        prefix = 'module.dense_net_121.'
+        for k, v in pretrained_weight.items():
+            if 'classifier' not in k:
+                new_k = k[len(prefix):]
+                new_state_dict[new_k] = v
+
+        msg = self.dense_net_121.load_state_dict(new_state_dict, strict=False)
+        assert set(msg.missing_keys) == {
+            "classifier.weight",
+            "classifier.bias"
+        }, set(msg.missing_keys)
 
     def forward(self, x):
-        assert self.mode == "PER_IMAGE"
         with torch.no_grad():
-            z = self.features(x)
-            z = F.relu(z)
-            features = F.adaptive_avg_pool2d(z, (1, 1)).squeeze()
+            features = self.dense_net_121(x)
 
         return features
 
 class MLC(nn.Module):
     def __init__(
         self,
-        num_classes=14,
+        num_classes=13,
         fc_in_features=1024,
     ):
         super(MLC, self).__init__()
@@ -49,9 +66,9 @@ class MLC(nn.Module):
         return tag_probs
 
 class MLCTrainer(nn.Module):
-    def __init__(self, threshold=0.5):
+    def __init__(self, num_classes=13, threshold=0.5):
         super(MLCTrainer, self).__init__()
-        self.mlc = MLC()
+        self.mlc = MLC(num_classes)
         self.loss = nn.BCEWithLogitsLoss()
         self.threshold = threshold
 
@@ -86,4 +103,4 @@ class MLCTrainer(nn.Module):
 
 if __name__ == "__main__":
     m = CNNnetwork()
-    m.to_distributed("cuda:0")
+    print(m)

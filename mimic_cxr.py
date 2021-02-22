@@ -79,14 +79,16 @@ class MIMICCXR_DataSource(DataSource):
 
         caption = self.txt_dict[key]['findings']
         if is_nan(caption):
-            caption = 'normal. '
+            caption = 'the lungs are normal. '
         caption_token = list()
         max_word_num = 0
+
         for sentence in caption.split('. '):
             sentence = sentence.split()
-            tokens = list()
-            tokens.append(self.vocab('<start>'))
-            tokens.extend([self.vocab(token) for token in sentence])
+            if len(sentence) == 0 or len(sentence) == 1:
+                continue
+
+            tokens = [self.vocab(token) for token in sentence]
             tokens.append(self.vocab('<end>'))
             if max_word_num < len(tokens):
                 max_word_num = len(tokens)

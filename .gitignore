@@ -142,3 +142,9 @@ tbx_folder/
 
 # vscode realted
 .vscode
+
+tbx_*
+output_default_*
+exp_default_*
+compare.py
+*pth.tar
