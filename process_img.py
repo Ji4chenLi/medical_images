@@ -1,8 +1,8 @@
 import os
 import os.path as osp
-from tqdm import tqdm
-import pandas as pd
 import csv
+from tqdm import tqdm
+
 import torch
 import torch.utils.data
 from torchvision.datasets.folder import pil_loader
@@ -16,39 +16,49 @@ from texar.torch.data.data import DataSource
 import config_findings as config
 from models.cv_model import CNNnetwork
 
-class MIMICCXR_Image_DataSource(DataSource):
+class IU_XRay_Image_DataSource(DataSource):
     """
     Dataset website here:
-    https://physionet.org/content/mimic-cxr-jpg/2.0.0/
+    https://www.kaggle.com/raddar/chest-xrays-indiana-university
     """
 
     def __init__(self, hparams):
         self._hparams = HParams(hparams, self.default_hparams())
-        self.mode = self._hparams["mode"]
-        self.csv = pd.read_csv(self._hparams["processed_csv"])
+        self.file_names, self.labels = self.__load_label_list(
+            self._hparams.label_path)
         self.transforms = self.build_transform(self._hparams['transforms'])
 
+    def __load_label_list(self, file_list):
+        labels = []
+        filename_list = []
+        with open(file_list, 'r') as f:
+            for line in f:
+                items = line.split()
+                image_name = items[0]
+                label = items[1:]
+                label = [int(i) for i in label]
+
+                image_name = '{}.png'.format(image_name)
+                image_name = osp.join(self._hparams.img_root, image_name)
+
+                filename_list.append(image_name)
+                labels.append(label)
+        return filename_list, labels
+
     def __len__(self):
-        return len(self.csv)
+        return len(self.file_names)
 
     def __iter__(self):
-        for _, row in self.csv.iterrows():
-            yield row
+        for i in range(len(self.file_names)):
+            yield self.__getitem__(i)
 
     def __getitem__(self, index):
-        index = int(index)
 
-        def get_entries(index):
-            df = self.csv.iloc[index]
-            paths = df[0].split(',')
-            label = df[1:].tolist()
-            return paths, label
+        img_roots = self.file_names[index]
+        image_tensor = self.get_image(img_roots, self.transforms)
+        target_tensor = torch.FloatTensor(self.labels[index])
 
-        assert self.mode == "PER_IMAGE"
-        img_paths, label = get_entries(index)
-        image_tensor = self.get_image(img_paths[0], self.transforms)
-        target_tensor = torch.FloatTensor(label)
-        return img_paths, image_tensor, target_tensor
+        return img_roots, image_tensor, target_tensor
 
     @staticmethod
     def build_transform(tsfm_list):
@@ -57,12 +67,11 @@ class MIMICCXR_Image_DataSource(DataSource):
             t.append(getattr(tfms, func)(**args))
         return tfms.Compose(t)
 
-    def get_image(self, img_path, transforms):
-        assert self._hparams["input_channel"] != "GRAY"
+    def get_image(self, img_root, transforms):
 
         # In this way, we can skip the ToPILImage in the data augmentations,
         # speeding up the data loading
-        image = pil_loader(img_path)
+        image = pil_loader(img_root)
         image_tensor = transforms(image)
         return image_tensor
 
@@ -73,22 +82,16 @@ class MIMICCXR_Image_DataSource(DataSource):
         """
         hparams = DatasetBase.default_hparams()
         hparams.update({
-            "imgpath": None,
-            "feature_root": None,
-            "txtpath": None,
-            "vocabpath": None,
+            "img_root": None,
+            "label_path": None,
             "transforms": None,
-            "processed_csv": None,
-            "mode": None,
-            "batch_size": 1,
-            "input_channel": "RGB"
         })
         return hparams
 
 
-class MIMICCXR_Image_Dataset(DatasetBase):
+class IU_XRay_Image_Dataset(DatasetBase):
     def __init__(self, hparams=None, device="cuda:0"):
-        self.source = MIMICCXR_Image_DataSource(hparams)
+        self.source = IU_XRay_Image_DataSource(hparams)
         super().__init__(self.source, hparams, device)
 
     def process(self, raw_example):
@@ -134,17 +137,9 @@ class MIMICCXR_Image_Dataset(DatasetBase):
         """
         hparams = DatasetBase.default_hparams()
         hparams.update({
-            "imgpath": None,
-            "processed_csv": None,
-            "feature_root": None,
-            "txtpath": None,
-            "vocabpath": None,
+            "img_root": None,
             "transforms": None,
-            "mode": None,
-            "batch_size": 1,
-            "shuffle": False,
-            "shuffle_buffer_size": 32,
-            "input_channel": "RGB"
+            "label_path": None
         })
         return hparams
 
@@ -152,11 +147,10 @@ class MIMICCXR_Image_Dataset(DatasetBase):
 def save_features_pt(loader, root_dir):
     with torch.no_grad():
         for batch in tqdm(loader):
-            paths = batch['path'][0]
+            paths = batch['path']
             features = model(batch['image'])
             for path, feature in zip(paths, features):
-                path = path.replace(prefix, '').replace('.jpg', '.pt')
-                path = path[1:]
+                path = path.replace(prefix, '').replace('.png', '.pt')
                 path = osp.join(root_dir, path)
                 folder = osp.dirname(path)
                 if not osp.exists(folder):
@@ -164,103 +158,47 @@ def save_features_pt(loader, root_dir):
 
                 torch.save(feature, path)
 
+def exclude_invalid(inp_file, out_file, invalid):
+    with open(inp_file, 'rt') as inp, open(out_file, 'wt') as out:
+        writer = csv.writer(out)
+        for row in csv.reader(inp):
+            paths = row[0].split(',')[0]
+            if invalid[0] in paths or invalid[1] in paths or invalid[2] in paths:
+                continue
+            else:
+                writer.writerow(row)
+
 
 if __name__ == "__main__":
-    hparams = config.dataset
-    datasets = {split: MIMICCXR_Image_Dataset(hparams=config.dataset[split])
-                for split in ["train", "val", "test"]}
     model = CNNnetwork()
-    prefix = config.dataset['imgpath']
+    prefix = "/home/jiachen.li/iu_xray_images/"
+    root_to_save = '/home/jiachen.li/data_iu_xray'
+    transforms = [
+        ("Resize", {
+            "size": 256,
+            "interpolation": 1
+        }),
+        ("CenterCrop", {
+            "size": 224
+        }),
+        ("ToTensor", {}),
+        ("Normalize", {
+            "mean": (0.485, 0.456, 0.406),
+            "std": (0.229, 0.224, 0.225)
+        })
+    ]
+    # Train
+    hparams = {
+        "img_root": prefix,
+        "transforms": transforms,
+        "label_path": './mlc_data/train_data.txt' 
+    }
+    dataset_train = IU_XRay_Image_Dataset(hparams=hparams)
 
-    # train_loader = torch.utils.data.DataLoader(datasets['train'],
-    #                                            batch_size=32,
-    #                                            num_workers=2,
-    #                                            drop_last=False)
+    train_loader = torch.utils.data.DataLoader(dataset_train,
+                                               batch_size=32,
+                                               num_workers=2,
+                                               drop_last=False)
 
-    # root_to_save = '/home/jiachen.li/data_relu/train'
-    # save_features_pt(train_loader, root_to_save)
-
-    # val_loader = torch.utils.data.DataLoader(datasets['val'],
-    #                                            batch_size=32,
-    #                                            num_workers=2,
-    #                                            drop_last=False)
-
-    # root_to_save = '/home/jiachen.li/data_relu/val'
-    # save_features_pt(val_loader, root_to_save)
-
-    # test_loader = torch.utils.data.DataLoader(datasets['test'],
-    #                                            batch_size=32,
-    #                                            num_workers=2,
-    #                                            drop_last=False)
-
-    # root_to_save = '/home/jiachen.li/data_relu/test'
-    # save_features_pt(test_loader, root_to_save)
-
-    # inp_file = hparams['train']['processed_csv']
-    # out_file = './preprocessed_with_normal/train.csv'
-    # invalid = [
-    #     '8de3cbff-0613dea5-597b3a9b-cf3bc5e6-f87f6c36.jpg',
-    #     'bef65ae1-4e634fec-87c5648e-2310b295-352456b0.jpg',
-    #     '2e75ef66-664a337d-927a64a7-c2c87db7-2f2688dc.jpg'
-    # ]
-    # with open(inp_file, 'rt') as inp, open(out_file, 'wt') as out:
-    #     writer = csv.writer(out)
-    #     for row in csv.reader(inp):
-    #         paths = row[0].split(',')[0]
-    #         if invalid[0] in paths or invalid[1] in paths or invalid[2] in paths:
-    #             continue
-    #         else:
-    #             writer.writerow(row)
-
-    train_csv = pd.read_csv(hparams['train']['processed_csv'])
-    val_csv = pd.read_csv(hparams['val']['processed_csv'])
-    test_csv = pd.read_csv(hparams['test']['processed_csv'])
-
-    feature_root = '/home/jiachen.li/data_relu'
-    prefix = hparams['imgpath']
-
-    count = 0
-    for _, row in train_csv.iterrows():
-        path = row[0].split(',')[0]
-        pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
-
-        if not osp.exists(pt_path):
-            img = pil_loader(path)
-            img_pt = datasets['train'].source.transforms(img).unsqueeze(0)
-            with torch.no_grad():
-                print(img_pt.shape)
-                feature = model(img_pt)
-            torch.save(feature, path)
-            count += 1
-
-    print(count)
-
-    for _, row in val_csv.iterrows():
-        path = row[0].split(',')[0]
-        pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
-
-        if not osp.exists(pt_path):
-            img = pil_loader(path)
-            img_pt = datasets['val'].source.transforms(img).unsqueeze(0)
-            with torch.no_grad():
-                print(img_pt.shape)
-                feature = model(img_pt)
-            torch.save(feature, path)
-            count += 1
-
-    print(count)
-
-    for _, row in test_csv.iterrows():
-        path = row[0].split(',')[0]
-        pt_path = osp.join(feature_root, path.replace(prefix, '').replace('.jpg', '.pt')[1:])
-
-        if not osp.exists(pt_path):
-            img = pil_loader(path)
-            img_pt = datasets['test'].source.transforms(img).unsqueeze(0)
-            with torch.no_grad():
-                print(img_pt.shape)
-                feature = model(img_pt)
-            torch.save(feature, path)
-            count += 1
-
-    print(count)
+    for i, batch in tqdm(enumerate(train_loader)):
+        print(i)

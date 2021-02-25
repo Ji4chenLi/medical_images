@@ -6,9 +6,8 @@ from pathlib import Path
 import torch
 from texar.torch.run import Executor, cond, metric, action
 
-from build_vocab import Vocabulary
 from models.cv_model import MLCTrainer
-from mimic_cxr import MIMICCXR_Dataset
+from iu_xray_data import IU_XRay_Dataset
 
 from evaluation_metrics import HammingLoss, MultiLabelConfusionMatrix, \
     MultiLabelF1, MultiLabelPrecision, MultiLabelRecall, RocAuc
@@ -22,13 +21,19 @@ parser.add_argument(
     '--save_dir',
     type=str,
     help='Place to save training results',
-    default='exp_default/'
+    default='exp_default_mlc/'
 )
 parser.add_argument(
     '--output_dir',
     type=str,
     help='Place to save logs results',
-    default='output_default/'
+    default='output_default_mlc/'
+)
+parser.add_argument(
+    '--tbx_dir',
+    type=str,
+    help='Place to save tensorboard data',
+    default='tbx_folder_mlc/'
 )
 parser.add_argument(
     '--grad_clip',
@@ -54,11 +59,11 @@ if not osp.exists(args.output_dir):
     os.mkdir(args.output_dir)
 
 # Dataloader
-datasets = {split: MIMICCXR_Dataset(hparams=hparams_dataset[split])
+datasets = {split: IU_XRay_Dataset(hparams=hparams_dataset[split])
             for split in ["train", "val", "test"]}
 print("done with loading")
 # model
-model = MLCTrainer()
+model = MLCTrainer(len(hparams_dataset["pathologies"]))
 output_dir = Path(args.output_dir)
 num_label = len(hparams_dataset['pathologies'])
 
@@ -70,7 +75,7 @@ executor = Executor(
     test_data=datasets["test"],
     checkpoint_dir=args.save_dir,
     save_every=cond.validation(better=True),
-    train_metrics=[("loss", metric.RunningAverage(args.display_steps))],
+    train_metrics=[("loss", metric.Average())],
     optimizer={"type": torch.optim.Adam},
     grad_clip=args.grad_clip,
     log_every=cond.iteration(args.display_steps),
@@ -93,7 +98,7 @@ executor = Executor(
         action.scale_lr(0.8)],
     stop_training_on=cond.iteration(args.max_train_steps),
     test_mode='eval',
-    tbx_logging_dir='tbx_folder',
+    tbx_logging_dir=args.tbx_dir,
     test_metrics=[
         HammingLoss[float](num_label=num_label, pred_name="preds", label_name="label"),
         RocAuc(pred_name="probs", label_name="label"),
@@ -108,5 +113,5 @@ executor = Executor(
 )
 
 # executor.train()
-executor.load('exp_default/1611883760.6407511.pt')
+executor.load('exp_default_mlc/1613790555.4441173.pt')
 executor.test()

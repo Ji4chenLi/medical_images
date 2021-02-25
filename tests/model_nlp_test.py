@@ -36,7 +36,7 @@ class NLPModelTest(unittest.TestCase):
             "num_semantic": 512,
         })
 
-        # v: [Batch_size, max_time_steps = N_v, hidden_state = visual_units]
+        # v: [Batch_size, hidden_state = visual_units]
         # a: [Batch_size, max_time_steps = N_a, hidden_state = semantic_units]
         input_v = torch.zeros(1, 121, 1024)
         input_a = torch.zeros(1, 121, 512)

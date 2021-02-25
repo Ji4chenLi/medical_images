@@ -4,20 +4,17 @@ import os
 import os.path as osp
 from pathlib import Path
 import torch
-from texar.torch.run import Executor, cond, metric, action
+from texar.torch.run import Executor, cond, action
+from texar.torch.run.metric import Average, RunningAverage
 
-from build_vocab import Vocabulary
-from models.cv_model import MLCTrainer
-from mimic_cxr import MIMICCXR_Dataset
-
-from evaluation_metrics import HammingLoss, MultiLabelConfusionMatrix, \
-    MultiLabelF1, MultiLabelPrecision, MultiLabelRecall, RocAuc
+from models.model import MedicalReportGenerator
+from iu_xray_data import IU_XRay_Dataset
 
 from config_findings import dataset as hparams_dataset
 
 
 # args
-parser = argparse.ArgumentParser(description="Train MIMIC model")
+parser = argparse.ArgumentParser(description="Train IU XRay model")
 parser.add_argument(
     '--save_dir',
     type=str,
@@ -29,6 +26,12 @@ parser.add_argument(
     type=str,
     help='Place to save logs results',
     default='output_default/'
+)
+parser.add_argument(
+    '--tbx_dir',
+    type=str,
+    help='Place to save tensorboard data',
+    default='tbx_folder/'
 )
 parser.add_argument(
     '--grad_clip',
@@ -43,10 +46,10 @@ parser.add_argument(
     default=1
 )
 parser.add_argument(
-    '--max_train_steps',
+    '--max_train_epochs',
     type=int,
-    help='Maximum number of steps to train',
-    default=1000000
+    help='Maximum number of epochs to train',
+    default=1000
 )
 args = parser.parse_args()
 
@@ -54,13 +57,13 @@ if not osp.exists(args.output_dir):
     os.mkdir(args.output_dir)
 
 # Dataloader
-datasets = {split: MIMICCXR_Dataset(hparams=hparams_dataset[split])
+datasets = {split: IU_XRay_Dataset(hparams=hparams_dataset[split])
             for split in ["train", "val", "test"]}
 print("done with loading")
 # model
-model = MLCTrainer()
+model = MedicalReportGenerator(hparams_dataset["model"])
 output_dir = Path(args.output_dir)
-num_label = len(hparams_dataset['pathologies'])
+optim = torch.optim.Adam(model.parameters(), lr=hparams_dataset["lr"])
 
 # Trainer
 executor = Executor(
@@ -69,21 +72,26 @@ executor = Executor(
     valid_data=datasets["val"],
     test_data=datasets["test"],
     checkpoint_dir=args.save_dir,
-    save_every=cond.validation(better=True),
-    train_metrics=[("loss", metric.RunningAverage(args.display_steps))],
-    optimizer={"type": torch.optim.Adam},
+    save_every=[cond.validation(better=True), cond.epoch(25)],
+    train_metrics=[
+        ("loss", Average(pred_name="loss")),
+        ("stop_loss", Average(pred_name="stop_loss")),
+        ("word_loss", Average(pred_name="word_loss")),
+        ("attention_loss", Average(pred_name="attention_loss")),
+        ("topic_var", RunningAverage(
+            pred_name="topic_var", queue_size=args.display_steps)),
+        ],
+    optimizer=optim,
     grad_clip=args.grad_clip,
     log_every=cond.iteration(args.display_steps),
     log_destination=[sys.stdout, output_dir / "log.txt"],
     validate_every=cond.epoch(1),
     valid_metrics=[
-        # HammingLoss[float](num_label=num_label, pred_name="preds", label_name="label"),
-        # RocAuc(pred_name="probs", label_name="label"),
-        # MultiLabelConfusionMatrix(num_label=num_label, pred_name="preds", label_name="label"),
-        # MultiLabelPrecision(num_label=num_label, pred_name="preds", label_name="label"),
-        # MultiLabelRecall(num_label=num_label, pred_name="preds", label_name="label"),
-        # MultiLabelF1(num_label=num_label, pred_name="preds", label_name="label"),
-        ("loss", metric.Average())
+        ("bleu_1", Average(pred_name="bleu_1")),
+        ("bleu_2", Average(pred_name="bleu_2")),
+        ("bleu_3", Average(pred_name="bleu_3")),
+        ("bleu_4", Average(pred_name="bleu_4")),
+        ("bleu", Average(pred_name="bleu")),
     ],
     plateau_condition=[
         cond.consecutive(cond.validation(better=False), 2)],
@@ -91,22 +99,19 @@ executor = Executor(
         action.early_stop(patience=10),
         action.reset_params(),
         action.scale_lr(0.8)],
-    stop_training_on=cond.iteration(args.max_train_steps),
-    test_mode='eval',
-    tbx_logging_dir='tbx_folder',
+    stop_training_on=cond.epoch(args.max_train_epochs),
+    test_mode='predict',
+    tbx_logging_dir=args.tbx_dir,
     test_metrics=[
-        HammingLoss[float](num_label=num_label, pred_name="preds", label_name="label"),
-        RocAuc(pred_name="probs", label_name="label"),
-        MultiLabelConfusionMatrix(num_label=num_label, pred_name="preds", label_name="label"),
-        MultiLabelPrecision(num_label=num_label, pred_name="preds", label_name="label"),
-        MultiLabelRecall(num_label=num_label, pred_name="preds", label_name="label"),
-        MultiLabelF1(num_label=num_label, pred_name="preds", label_name="label"),
-        ("loss", metric.Average())
+        ("bleu_1", Average(pred_name="bleu_1")),
+        ("bleu_2", Average(pred_name="bleu_2")),
+        ("bleu_3", Average(pred_name="bleu_3")),
+        ("bleu_4", Average(pred_name="bleu_4")),
+        ("bleu", Average(pred_name="bleu")),
     ],
     print_model_arch=False,
     show_live_progress=True
 )
 
-# executor.train()
-executor.load('exp_default/1611883760.6407511.pt')
+executor.train()
 executor.test()

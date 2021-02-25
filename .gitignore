@@ -129,12 +129,15 @@ dmypy.json
 .pyre/
 
 #experiments
+compare.py
 without_normal_without/
-exp_default/
-output_default/
-tbx_folder/
+exp_*/
+output_*/
+tbx_*/
+text_root/
 **.csv
 *.sh
+*.pth.tar
 
 # checkpoint
 **.pt
