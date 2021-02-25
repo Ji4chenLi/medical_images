@@ -138,6 +138,20 @@ text_root/
 **.csv
 *.sh
 *.pth.tar
+.gitignore
+
+# pending files
+
+mlc_data/
+models/
+config_findings.py
+evaluation_metrics.py
+iu_xray_data.py
+process_img.py
+process_txt.py
+scratch.py
+train_lstm.py
+train.py
 
 # checkpoint
 **.pt
