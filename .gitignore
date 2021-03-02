@@ -139,6 +139,7 @@ text_root/
 *.sh
 *.pth.tar
 .gitignore
+texar_vocab.txt
 
 # pending files
 
@@ -151,7 +152,7 @@ process_img.py
 process_txt.py
 scratch.py
 train_lstm.py
-train.py
+train_mlc.py
 
 # checkpoint
 **.pt
